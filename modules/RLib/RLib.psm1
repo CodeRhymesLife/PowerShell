@@ -1,14 +1,14 @@
-$GoToShortcuts = @{}
-
 Function GoTo
 {
+    $goToShortcuts = Get-Goto
+
     $Shortcut = $args[0]
-	if(!$GoToShortcuts.Contains($Shortcut)) {
+	if(!$goToShortcuts.Contains($Shortcut)) {
         Write-Error "$Shortcut does not exist"
         return
     }
     
-    $path = $GoToShortcuts[$Shortcut]
+    $path = $goToShortcuts[$Shortcut]
     Write-Debug "Found $Shortcut in list of shortcuts. "
     Write-Debug "path is now '$path'."
     for($i=1; $i -lt $args.Count; $i++){
@@ -27,13 +27,51 @@ Function GoTo
 }
 
 Function Add-Goto {
-param ([string] $Shortcut, [string] $Path)
-    if(!$Shortcut -or !$Path){
-        Write-Error "Invalid shortcut or path"
-        return
-    }
+param (
+    [Parameter(Mandatory=$true)]
+    [string] $Shortcut,
     
-    $GoToShortcuts[$Shortcut] = $Path
+    [Parameter(Mandatory=$true)]
+    [string] $Path
+)
+    # Ensure the shortcut and path do not contain invalid characters
+    $invalidCharacters = @(";", "=");
+    foreach($invalidCharacter in $invalidCharacters){
+        if(($Shortcut + $Path).Contains($invalidCharacter)){
+            Write-Error "Neither the shortcut or the path can contain ';' or '='"
+            return
+        }
+    }    
+
+    $newRLibGoToPath = Add-Unique $env:RLibGoToPath "$Shortcut=$Path;"
+    if($newRLibGoToPath -ne $env:RLibGoToPath)
+    {
+        Write-Host "Adding GoTo shortcut..."
+        # Add this shortcut to the RLibGoToPath paths so we can navigate
+        # to the give path with the given shortcut
+	    [Environment]::SetEnvironmentVariable("RLibGoToPath", $newRLibGoToPath, [EnvironmentVariableTarget]::User)
+
+        Write-Host "Please restart powershell for path to take effect"
+    }
+}
+
+Function Get-Goto {
+    $gotoShortcuts = @{}
+
+    if($env:RLibGoToPath){
+        # Get shortcut paths mapping
+        $env:RLibGoToPath.Split(";") | ForEach-Object {
+            $shotcutPath = $_.Split("=")
+
+            # If we have a valid shortcut and path
+            # add it to the mapping
+            if($shotcutPath[0] -and $shotcutPath[1]){
+                $gotoShortcuts[$shotcutPath[0]] = $shotcutPath[1]
+            }
+        }
+    }
+
+    return $gotoShortcuts
 }
 
 Function Add-Unique {
